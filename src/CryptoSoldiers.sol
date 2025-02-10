@@ -1,0 +1,292 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+// import {Strings} from "./Strings.sol";
+import {Errors} from "./Errors.sol";
+
+interface IERC165 {
+  function supportsInterface(bytes4 interfaceId) external view returns (bool);
+}
+
+interface IERC721 {
+  event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+  event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+  event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+  function balanceOf(address owner) external view returns (uint256 balance);
+  function ownerOf(uint256 tokenId) external view returns (address owner);
+  function transferFrom(address from, address to, uint256 tokenId) external;
+  function safeTransferFrom(
+    address from,
+    address to,
+    uint256 tokenId,
+    bytes calldata data
+  ) external;
+  function safeTransferFrom(address from, address to, uint256 tokenId) external;
+  function approve(address to, uint256 tokenId) external;
+  function getApproved(uint256 tokenId) external view returns (address operator);
+  function setApprovalForAll(address operator, bool approved) external;
+  function isApprovedForAll(address owner, address operator) external view returns (bool);
+}
+
+interface IERC721Metadata {
+  function name() external view returns (string memory);
+  function symbol() external view returns (string memory);
+  function tokenURI(uint256 tokenId) external view returns (string memory);
+}
+
+/**
+ * @title ERC-721 token receiver interface
+ * @dev Interface for any contract that wants to support safeTransfers from ERC-721 asset contracts.
+ */
+interface IERC721Receiver {
+  function onERC721Received(
+    address operator,
+    address from,
+    uint256 tokenId,
+    bytes calldata data
+  ) external returns (bytes4);
+}
+
+/**
+ * @dev Implementation of ERC-721 Non-Fungible Token Standard
+ */
+contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
+  // using Strings for uint256;
+
+  address private _contractOwner;
+  string private _baseURI;
+  string private _name;
+  string private _symbol;
+
+  mapping(uint256 tokenId => address) private _owners;
+  mapping(address owner => uint256) private _balances;
+  mapping(uint256 tokenId => address) private _tokenApprovals;
+  mapping(address owner => mapping(address operator => bool)) private _operatorApprovals;
+
+  constructor(string memory name_, string memory symbol_) {
+    _baseURI = "https://api.cryptosoldiers.com/nft/";
+    _name = name_;
+    _symbol = symbol_;
+    _contractOwner = msg.sender;
+  }
+
+  function _requireOwned(uint256 tokenId) internal view returns (address) {
+    address owner = _owners[tokenId];
+    if (owner == address(0)) {
+      revert NonexistentToken(tokenId);
+    }
+    return owner;
+  }
+
+  function _requireNotOwned(uint256 tokenId) internal view {
+    address owner = _owners[tokenId];
+    if (owner != address(0)) {
+      revert AlreadyOwnedToken(tokenId);
+    }
+  }
+
+  function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
+    return
+      interfaceId == 0x80ac58cd || // ERC721
+      interfaceId == 0x5b5e139f; // ERC721Metadata
+  }
+
+  function name() public view returns (string memory) {
+    return _name;
+  }
+
+  function symbol() public view returns (string memory) {
+    return _symbol;
+  }
+
+  function tokenURI(uint256 tokenId) public view returns (string memory) {
+    _requireOwned(tokenId);
+    // return string.concat(_baseURI, tokenId.toString());
+    return string.concat(_baseURI, uint2str(tokenId));
+  }
+
+  function changeBaseURI(string memory newBaseURI) public onlyOwner {
+    _baseURI = newBaseURI;
+  }
+
+  function changeContractOwner(address _newOwner) public onlyOwner {
+    if (_newOwner == address(0)) {
+      revert InvalidOwner(address(0));
+    }
+    _contractOwner = _newOwner;
+  }
+
+  function balanceOf(address owner) public view returns (uint256) {
+    if (owner == address(0)) {
+      revert InvalidOwner(address(0));
+    }
+    return _balances[owner];
+  }
+
+  function ownerOf(uint256 tokenId) public view returns (address) {
+    return _requireOwned(tokenId);
+  }
+
+  function transferFrom(address from, address to, uint256 tokenId) public {
+    if (from == address(0)) {
+      revert InvalidSender(to);
+    }
+
+    if (to == address(0)) {
+      revert InvalidReceiver(to);
+    }
+
+    address owner = _requireOwned(tokenId);
+    if (owner != from) {
+      revert IncorrectOwner(from, tokenId, owner);
+    }
+
+    if (
+      !_isTokenOwner(tokenId, msg.sender) &&
+      !_isApprovedSender(tokenId, msg.sender) &&
+      !_isOperator(msg.sender, owner)
+    ) {
+      revert IncorrectOwner(msg.sender, tokenId, owner);
+    }
+
+    _clearApproval(tokenId);
+
+    unchecked {
+      _balances[from] -= 1;
+      _balances[to] += 1;
+    }
+
+    _owners[tokenId] = to;
+    emit Transfer(from, to, tokenId);
+  }
+
+  function safeTransferFrom(address from, address to, uint256 tokenId) public {
+    safeTransferFrom(from, to, tokenId, "");
+  }
+
+  function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public {
+    transferFrom(from, to, tokenId);
+    checkOnERC721Received(msg.sender, from, to, tokenId, data);
+  }
+
+  function _isTokenOwner(uint256 tokenId, address sender) internal view returns (bool) {
+    return _owners[tokenId] == sender;
+  }
+
+  function _isApprovedSender(uint256 tokenId, address sender) internal view returns (bool) {
+    return _tokenApprovals[tokenId] == sender;
+  }
+
+  function _isOperator(address sender, address owner) internal view returns (bool) {
+    return _operatorApprovals[owner][sender];
+  }
+
+  function _clearApproval(uint256 tokenId) internal {
+    _tokenApprovals[tokenId] = address(0);
+  }
+
+  function approve(address approvedSender, uint256 tokenId) public {
+    if (approvedSender == address(0)) {
+      revert InvalidReceiver(approvedSender);
+    }
+
+    address owner = _requireOwned(tokenId);
+    if (!_isTokenOwner(tokenId, msg.sender) && !_isOperator(msg.sender, owner)) {
+      revert IncorrectOwner(msg.sender, tokenId, owner);
+    }
+
+    _tokenApprovals[tokenId] = approvedSender;
+    emit Approval(owner, approvedSender, tokenId);
+  }
+
+  function getApproved(uint256 tokenId) public view returns (address) {
+    _requireOwned(tokenId);
+    return _tokenApprovals[tokenId];
+  }
+
+  function setApprovalForAll(address operator, bool approved) public {
+    if (operator == address(0)) {
+      revert InvalidOperator(address(0));
+    }
+    _operatorApprovals[msg.sender][operator] = approved;
+    emit ApprovalForAll(msg.sender, operator, approved);
+  }
+
+  function isApprovedForAll(address owner, address operator) public view returns (bool) {
+    return _isOperator(operator, owner);
+  }
+
+  function checkOnERC721Received(
+    address operator,
+    address from,
+    address to,
+    uint256 tokenId,
+    bytes memory data
+  ) internal {
+    if (to.code.length > 0) {
+      try IERC721Receiver(to).onERC721Received(operator, from, tokenId, data) returns (
+        bytes4 retval
+      ) {
+        if (retval != IERC721Receiver.onERC721Received.selector) {
+          // Token rejected
+          revert InvalidReceiver(to);
+        }
+      } catch (bytes memory reason) {
+        if (reason.length == 0) {
+          // non-IERC721Receiver implementer
+          revert InvalidReceiver(to);
+        } else {
+          assembly ("memory-safe") {
+            revert(add(32, reason), mload(reason))
+          }
+        }
+      }
+    }
+  }
+
+  function mint(address to, uint256 tokenId) public onlyOwner {
+    _requireNotOwned(tokenId);
+    _owners[tokenId] = to;
+    _balances[to] += 1;
+
+    // TODO: check if this event is required
+    emit Transfer(address(0), to, tokenId);
+  }
+
+  function burn(uint256 tokenId) public onlyOwner {
+    address owner = _requireOwned(tokenId);
+    _balances[owner] -= 1;
+    _owners[tokenId] = address(0);
+    _tokenApprovals[tokenId] = address(0);
+
+    // TODO: check if this event is required
+    emit Transfer(owner, address(0), tokenId);
+  }
+
+  function uint2str(uint _i) internal pure returns (string memory) {
+    if (_i == 0) {
+      return "0";
+    }
+    uint j = _i;
+    uint len;
+    while (j != 0) {
+      len++;
+      j /= 10;
+    }
+    bytes memory bstr = new bytes(len);
+    uint k = len;
+    while (_i != 0) {
+      k = k - 1;
+      uint8 temp = (48 + uint8(_i - (_i / 10) * 10));
+      bytes1 b1 = bytes1(temp);
+      bstr[k] = b1;
+      _i /= 10;
+    }
+    return string(bstr);
+  }
+
+  modifier onlyOwner() {
+    require(msg.sender == _contractOwner, "Unauthorized");
+    _;
+  }
+}
