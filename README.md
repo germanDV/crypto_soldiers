@@ -1,3 +1,27 @@
+## Cost
+
+`forge test --gas-report`
+
+More info: https://book.getfoundry.sh/forge/gas-reports
+
+## Deploy with Verification
+
+```shell
+forge create --rpc-url <your_rpc_url> \\
+    --constructor-args "ForgeUSD" "FUSD" 18 1000000000000000000000 \\
+    --private-key <your_private_key> src/MyToken.sol:MyToken \\
+    --etherscan-api-key <your_etherscan_api_key> \\
+    --verify
+```
+
+What is the Etherscan API Key? Does it show up as verified in etherscan if I create an account?
+
+## Testing With External Test Suites
+
+- standard audited implementation with tests: https://github.com/nibbstack/erc721
+- validator: https://erc721validator.org/ & https://github.com/nibbstack/erc721-validator
+- tests by some dev in etherexchange: https://github.com/AnAllergyToAnalogy/ERC721/blob/master/tests/Token.test.js
+
 ## Foundry
 
 **Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
