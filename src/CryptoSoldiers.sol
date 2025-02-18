@@ -1,7 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// import {Strings} from "./Strings.sol";
+// TODO:
+//  - implement ideas from ClaudesContract.sol:
+//    - have a purchase method that is payable so that it accepts ETH to buy an NFT
+//       - this implies having a mapping with the price for each NFT and a function to update it
+//       - emit an event when the price is updated
+//    - have a redeem method that burns the NFT and sends ETH to the owner
+//       - this implies having a mapping to mark which tokens are redeemable
+//       - emit an event when a token becomes redeemable
+//    - make it pausable, and have a modifier to stop minting, purchasing, transfering and redeeming when paused
+//       - emit events when pausing and unpausing
+//  - apply some best practices from https://github.com/nibbstack/erc721
+//    - naming of mappings (for example `tokenToOwner`)
+//    - use it to double check implementation of the more complex methods
+//  - watch https://www.youtube.com/watch?v=JS_kS-CjFcM
+//  - add natspec comments to document all public functions
+//  - follow best practices from foundry: https://book.getfoundry.sh/guides/best-practices
+
 import {Errors} from "./Errors.sol";
 
 interface IERC165 {
@@ -12,6 +28,7 @@ interface IERC721 {
   event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
   event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
   event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+  event Withdrawal(address indexed to, uint256 balance);
   function balanceOf(address owner) external view returns (uint256 balance);
   function ownerOf(uint256 tokenId) external view returns (address owner);
   function transferFrom(address from, address to, uint256 tokenId) external;
@@ -32,6 +49,7 @@ interface IERC721Metadata {
   function name() external view returns (string memory);
   function symbol() external view returns (string memory);
   function tokenURI(uint256 tokenId) external view returns (string memory);
+  // Add event when tokenURI changes
 }
 
 /**
@@ -48,26 +66,28 @@ interface IERC721Receiver {
 }
 
 /**
- * @dev Implementation of ERC-721 Non-Fungible Token Standard
+ * @dev Implementation of ERC-721 Non-Fungible Token Standard.
  */
 contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
-  // using Strings for uint256;
-
   address private _contractOwner;
   string private _baseURI;
   string private _name;
   string private _symbol;
+  uint16 private _totalSupply;
 
-  mapping(uint256 tokenId => address) private _owners;
-  mapping(address owner => uint256) private _balances;
-  mapping(uint256 tokenId => address) private _tokenApprovals;
-  mapping(address owner => mapping(address operator => bool)) private _operatorApprovals;
+  mapping(uint256 tokenId => address owner) private _owners;
+  mapping(address owner => uint256 balance) private _balances;
+  mapping(uint256 tokenId => address approvedAddress) private _tokenApprovals;
+  mapping(address owner => mapping(address operator => bool hasPermission))
+    private _operatorApprovals;
 
-  constructor(string memory name_, string memory symbol_) {
+  constructor(string memory name_, string memory symbol_, uint16 totalSupply_) {
     _baseURI = "https://api.cryptosoldiers.com/nft/";
     _name = name_;
     _symbol = symbol_;
     _contractOwner = msg.sender;
+    _totalSupply = totalSupply_;
+    _mint(totalSupply_);
   }
 
   function _requireOwned(uint256 tokenId) internal view returns (address) {
@@ -99,9 +119,12 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return _symbol;
   }
 
+  function totalSupply() public view returns (uint16) {
+    return _totalSupply;
+  }
+
   function tokenURI(uint256 tokenId) public view returns (string memory) {
     _requireOwned(tokenId);
-    // return string.concat(_baseURI, tokenId.toString());
     return string.concat(_baseURI, uint2str(tokenId));
   }
 
@@ -109,12 +132,31 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     _baseURI = newBaseURI;
   }
 
-  function changeContractOwner(address _newOwner) public onlyOwner {
-    if (_newOwner == address(0)) {
+  function changeContractOwner(address newOwner) public onlyOwner {
+    if (newOwner == address(0)) {
       revert InvalidOwner(address(0));
     }
-    _contractOwner = _newOwner;
+    _contractOwner = newOwner;
+    // TODO: emit event about owner change
   }
+
+  function buyToken(uint256 tokenId) public payable {
+    _requireNotOwned(tokenId);
+    // TODO: check that token is for sale (owned by contract address)
+    // TODO: check if msg.value >= price. I could use Chainlink to get a ETH/USD exchange rate (https://docs.chain.link)
+    transferFrom(address(this), msg.sender, tokenId);
+    // TODO: emit event about the purchase, we have one for the transfer, but this one could inlcude the price
+    // TODO: return excess payment if any
+  }
+
+  function withdraw(address to) public onlyOwner {
+    uint256 balance = address(this).balance;
+    (bool sent, ) = payable(to).call{value: balance}("");
+    require(sent, "Failed to withdraw funds");
+    emit Withdrawal(to, balance);
+  }
+
+  receive() external payable {}
 
   function balanceOf(address owner) public view returns (uint256) {
     if (owner == address(0)) {
@@ -244,13 +286,11 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     }
   }
 
-  function mint(address to, uint256 tokenId) public onlyOwner {
-    _requireNotOwned(tokenId);
-    _owners[tokenId] = to;
-    _balances[to] += 1;
-
-    // TODO: check if this event is required
-    emit Transfer(address(0), to, tokenId);
+  function _mint(uint16 quantity) internal {
+    for (uint16 i = 0; i < quantity; i++) {
+      _owners[i + 1] = address(this);
+      _balances[address(this)] += 1;
+    }
   }
 
   function burn(uint256 tokenId) public onlyOwner {
@@ -258,8 +298,6 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     _balances[owner] -= 1;
     _owners[tokenId] = address(0);
     _tokenApprovals[tokenId] = address(0);
-
-    // TODO: check if this event is required
     emit Transfer(owner, address(0), tokenId);
   }
 
