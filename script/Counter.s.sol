@@ -11,7 +11,7 @@ contract CryptoSoldiersScript is Script {
 
   function run() public {
     vm.startBroadcast();
-    cryptoSoldiers = new CryptoSoldiers("CryptoSoldiers", "CS");
+    cryptoSoldiers = new CryptoSoldiers("CryptoSoldiers", "CS", 200);
     vm.stopBroadcast();
   }
 }

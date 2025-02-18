@@ -11,7 +11,7 @@ contract CryptoSoldiersTest is Test, Errors {
   CryptoSoldiers cryptoSoldiers;
 
   function setUp() public {
-    cryptoSoldiers = new CryptoSoldiers("CryptoSoldiers", "CS");
+    cryptoSoldiers = new CryptoSoldiers("CryptoSoldiers", "CS", 10);
   }
 
   function test_name() public view {
@@ -22,50 +22,73 @@ contract CryptoSoldiersTest is Test, Errors {
     assertEq(cryptoSoldiers.symbol(), "CS");
   }
 
+  function test_totalSupply() public view {
+    assertEq(cryptoSoldiers.totalSupply(), 10);
+  }
+
+  function test_allTokensAssignedToContract() public view {
+    assertEq(cryptoSoldiers.balanceOf(address(0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f)), 10);
+    assertEq(cryptoSoldiers.ownerOf(1), address(0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f));
+    assertEq(cryptoSoldiers.ownerOf(10), address(0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f));
+  }
+
   function testRevert_ownerOfInexistentToken() public {
     vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 0));
     cryptoSoldiers.ownerOf(0);
   }
 
-  function test_mint() public {
-    cryptoSoldiers.mint(msg.sender, 42);
-    assertEq(cryptoSoldiers.ownerOf(42), msg.sender);
-    assertEq(cryptoSoldiers.balanceOf(msg.sender), 1);
-  }
+  function test_burn() public {
+    address lastOwner = cryptoSoldiers.ownerOf(3);
 
-  function test_mintEmitsEvent() public {
-    // Check the first 3 indexed arguments of the emitted event;
-    // do not check the 'data' of the event (unindexed arguments);
-    vm.expectEmit(true, true, true, false);
+    // Check the first 3 indexed arguments of the emitted event and the optional 'data'.
+    vm.expectEmit(true, true, true, true);
 
     // Expected event.
-    emit IERC721.Transfer(address(0), msg.sender, 999);
+    emit IERC721.Transfer(lastOwner, address(0), 3);
 
     // Call the method that emits the actual event.
-    cryptoSoldiers.mint(msg.sender, 999);
+    cryptoSoldiers.burn(3);
+
+    // In addition to the event, test state after calling burn.
+    assertEq(cryptoSoldiers.balanceOf(address(0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f)), 9);
   }
 
-  function testRevert_mintAlreadyOwnedToken() public {
-    cryptoSoldiers.mint(msg.sender, 77);
-    vm.expectRevert(abi.encodeWithSelector(Errors.AlreadyOwnedToken.selector, 77));
-    cryptoSoldiers.mint(msg.sender, 77);
+  function testRevert_ownerOfBurntToken() public {
+    cryptoSoldiers.burn(6);
+    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 6));
+    cryptoSoldiers.ownerOf(6);
   }
 
-  function testRevert_mintNotByContractOwner() public {
+  function testRevert_doubleBurn() public {
+    cryptoSoldiers.burn(9);
+    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 9));
+    cryptoSoldiers.burn(9);
+  }
+
+  function test_tokenURI() public view {
+    assertEq(cryptoSoldiers.tokenURI(4), "https://api.cryptosoldiers.com/nft/4");
+  }
+
+  function testRevert_tokenURIOfInexistentToken() public {
+    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 450));
+    cryptoSoldiers.tokenURI(450);
+  }
+
+  function testRevert_tokenURIOfBurntToken() public {
+    cryptoSoldiers.burn(3);
+    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 3));
+    cryptoSoldiers.tokenURI(3);
+  }
+
+  function test_changeBaseURI() public {
+    assertEq(cryptoSoldiers.tokenURI(4), "https://api.cryptosoldiers.com/nft/4");
+    cryptoSoldiers.changeBaseURI("https://new.domain/nft/");
+    assertEq(cryptoSoldiers.tokenURI(4), "https://new.domain/nft/4");
+  }
+
+  function testRevert_changeBaseURINotByContractOwner() public {
     vm.expectRevert("Unauthorized");
     vm.prank(address(0xc0ffee254729296a45a3885639AC7E10F9d54979));
-    cryptoSoldiers.mint(msg.sender, 42);
-  }
-
-  function test_burn() public {
-    cryptoSoldiers.mint(msg.sender, 369);
-    assertEq(cryptoSoldiers.ownerOf(369), msg.sender);
-    assertEq(cryptoSoldiers.balanceOf(msg.sender), 1);
-
-    cryptoSoldiers.burn(369);
-    assertEq(cryptoSoldiers.balanceOf(msg.sender), 0);
-
-    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 369));
-    cryptoSoldiers.ownerOf(369);
+    cryptoSoldiers.changeBaseURI("https://new.domain/nft/");
   }
 }
