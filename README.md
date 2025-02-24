@@ -1,3 +1,7 @@
+## Learning Material
+
+- https://github.com/Cyfrin/foundry-full-course-cu
+
 ## Cost
 
 `forge test --gas-report`
@@ -21,6 +25,10 @@ What is the Etherscan API Key? Does it show up as verified in etherscan if I cre
 - standard audited implementation with tests: https://github.com/nibbstack/erc721
 - validator: https://erc721validator.org/ & https://github.com/nibbstack/erc721-validator
 - tests by some dev in etherexchange: https://github.com/AnAllergyToAnalogy/ERC721/blob/master/tests/Token.test.js
+
+## Security Check
+
+- https://github.com/crytic/slither
 
 ## Foundry
 

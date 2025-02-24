@@ -49,7 +49,6 @@ interface IERC721Metadata {
   function name() external view returns (string memory);
   function symbol() external view returns (string memory);
   function tokenURI(uint256 tokenId) external view returns (string memory);
-  // Add event when tokenURI changes
 }
 
 /**
@@ -65,15 +64,14 @@ interface IERC721Receiver {
   ) external returns (bytes4);
 }
 
-/**
- * @dev Implementation of ERC-721 Non-Fungible Token Standard.
- */
 contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
   address private _contractOwner;
   string private _baseURI;
   string private _name;
   string private _symbol;
   uint16 private _totalSupply;
+
+  event ContractOwnerChanged(address oldOwner, address newOwner);
 
   mapping(uint256 tokenId => address owner) private _owners;
   mapping(address owner => uint256 balance) private _balances;
@@ -132,20 +130,32 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     _baseURI = newBaseURI;
   }
 
+  function contractOwner() public view returns (address) {
+    return _contractOwner;
+  }
+
   function changeContractOwner(address newOwner) public onlyOwner {
+    address oldOwner = _contractOwner;
     if (newOwner == address(0)) {
       revert InvalidOwner(address(0));
     }
     _contractOwner = newOwner;
-    // TODO: emit event about owner change
+    emit ContractOwnerChanged(oldOwner, newOwner);
   }
 
   function buyToken(uint256 tokenId) public payable {
-    _requireNotOwned(tokenId);
+    // _requireNotOwned(tokenId); // FIXME: this doesn't work because it is already owned by the contract
     // TODO: check that token is for sale (owned by contract address)
     // TODO: check if msg.value >= price. I could use Chainlink to get a ETH/USD exchange rate (https://docs.chain.link)
-    transferFrom(address(this), msg.sender, tokenId);
-    // TODO: emit event about the purchase, we have one for the transfer, but this one could inlcude the price
+
+    address from = address(this);
+    address to = msg.sender;
+
+    _balances[from] -= 1;
+    _balances[to] += 1;
+    _owners[tokenId] = to;
+
+    // TODO: emit event about the purchase
     // TODO: return excess payment if any
   }
 
@@ -193,12 +203,10 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
 
     _clearApproval(tokenId);
 
-    unchecked {
-      _balances[from] -= 1;
-      _balances[to] += 1;
-    }
-
+    _balances[from] -= 1;
+    _balances[to] += 1;
     _owners[tokenId] = to;
+
     emit Transfer(from, to, tokenId);
   }
 
@@ -324,7 +332,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
   }
 
   modifier onlyOwner() {
-    require(msg.sender == _contractOwner, "Unauthorized");
+    if (msg.sender != _contractOwner) revert NotContractOwner();
     _;
   }
 }

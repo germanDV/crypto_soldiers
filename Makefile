@@ -12,7 +12,13 @@ confirm:
 .PHONY: test
 test:
 	@echo 'Running tests...'
-	forge test
+	forge test -vvv
+
+## coverage: run unit tests with coverage report
+.PHONY: coverage
+coverage:
+	@echo 'Running tests with coverage report...'
+	forge coverage
 
 ## localnode: start a local node with anvil
 .PHONY: localnode
@@ -34,4 +40,4 @@ deploy/testnet: confirm
 ## deploy/mainnet: deploy contract to Ethereum mainnet
 .PHONY: deploy/mainnet
 deploy/testnet: confirm
-	@echo 'Deploying contract to mainnet... TODO: use cast wallet instead of --private-key; validate that it has not been deployed already'
+	@echo 'Deploying contract to mainnet... TODO: use cast wallet instead of --private-key'

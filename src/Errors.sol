@@ -9,6 +9,11 @@ interface Errors {
   error InvalidOwner(address owner);
 
   /**
+   * @dev Indicates that the caller is not the contract owner.
+   */
+  error NotContractOwner();
+
+  /**
    * @dev Indicates a failure with the token `receiver`.
    * @param receiver Address to which tokens are being transferred.
    */
