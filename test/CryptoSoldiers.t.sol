@@ -153,6 +153,62 @@ contract CryptoSoldiersTest is Test, Errors {
     assertEq(newOwner, buyer);
   }
 
+  function testRevert_buyTokenWithContractPaused() public {
+    cryptoSoldiers.pause();
+    vm.expectRevert(Errors.ContractIsPaused.selector);
+    address buyer = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    vm.prank(buyer);
+    cryptoSoldiers.buyToken(7);
+  }
+
+  function test_buyTokenAfterUnpausingContract() public {
+    cryptoSoldiers.pause();
+    address buyer = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    cryptoSoldiers.unpause();
+    vm.prank(buyer);
+    cryptoSoldiers.buyToken(27);
+    address owner = cryptoSoldiers.ownerOf(27);
+    assertEq(owner, buyer);
+  }
+
+  function test_EmitContractPaused() public {
+    vm.expectEmit(true, true, true, true);
+    emit CryptoSoldiers.ContractPaused();
+    cryptoSoldiers.pause();
+  }
+
+  function test_EmitContractUnpaused() public {
+    cryptoSoldiers.pause();
+    vm.expectEmit(true, true, true, true);
+    emit CryptoSoldiers.ContractUnpaused();
+    cryptoSoldiers.unpause();
+  }
+
+  function testRevert_pauseNotByOwner() public {
+    vm.expectRevert(Errors.NotContractOwner.selector);
+    vm.prank(address(0xc0ffee254729296a45a3885639AC7E10F9d54979));
+    cryptoSoldiers.pause();
+  }
+
+  function testRevert_unpauseNotByOwner() public {
+    vm.expectRevert(Errors.NotContractOwner.selector);
+    vm.prank(address(0xc0ffee254729296a45a3885639AC7E10F9d54979));
+    cryptoSoldiers.unpause();
+  }
+
+  function test_idempotentPause() public {
+    cryptoSoldiers.pause();
+    cryptoSoldiers.pause();
+    assertEq(cryptoSoldiers.isPaused(), true);
+  }
+
+  function test_idempotentUnpause() public {
+    cryptoSoldiers.pause();
+    cryptoSoldiers.unpause();
+    cryptoSoldiers.unpause();
+    assertEq(cryptoSoldiers.isPaused(), false);
+  }
+
   function test_transferFrom() public {
     address oldOwner = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
     address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);

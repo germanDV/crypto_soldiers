@@ -6,7 +6,7 @@ pragma solidity ^0.8.20;
 //    - have a purchase method that is payable so that it accepts ETH to buy an NFT
 //       - this implies having a mapping with the price for each NFT and a function to update it
 //       - emit an event when the price is updated
-//    - have a redeem method that burns the NFT and sends ETH to the owner
+//    - have a redeem method that burns the NFT and sends ETH/USDC to the owner
 //       - this implies having a mapping to mark which tokens are redeemable
 //       - emit an event when a token becomes redeemable
 //    - make it pausable, and have a modifier to stop minting, purchasing, transfering and redeeming when paused
@@ -70,8 +70,11 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
   string private _name;
   string private _symbol;
   uint16 private _totalSupply;
+  bool private _paused;
 
   event TokenPurchased(address buyer, uint256 tokenId);
+  event ContractPaused();
+  event ContractUnpaused();
 
   mapping(uint256 tokenId => address owner) private _owners;
   mapping(address owner => uint256 balance) private _balances;
@@ -80,6 +83,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     private _operatorApprovals;
 
   constructor(address owner_, string memory name_, string memory symbol_, uint16 totalSupply_) {
+    _paused = false;
     _baseURI = "https://api.cryptosoldiers.com/nft/";
     _name = name_;
     _symbol = symbol_;
@@ -121,6 +125,20 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return _totalSupply;
   }
 
+  function pause() public onlyOwner {
+    _paused = true;
+    emit ContractPaused();
+  }
+
+  function unpause() public onlyOwner {
+    _paused = false;
+    emit ContractUnpaused();
+  }
+
+  function isPaused() public view returns (bool) {
+    return _paused;
+  }
+
   function tokenURI(uint256 tokenId) public view returns (string memory) {
     _requireOwned(tokenId);
     return string.concat(_baseURI, uint2str(tokenId));
@@ -134,7 +152,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return _contractOwner;
   }
 
-  function buyToken(uint256 tokenId) public payable {
+  function buyToken(uint256 tokenId) public payable isNotPaused {
     _requireForSale(tokenId);
     // TODO: check if msg.value >= price. I could use Chainlink to get a ETH/USD exchange rate (https://docs.chain.link)
 
@@ -168,7 +186,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return _requireOwned(tokenId);
   }
 
-  function transferFrom(address from, address to, uint256 tokenId) public {
+  function transferFrom(address from, address to, uint256 tokenId) public isNotPaused {
     if (from == address(0)) {
       revert InvalidSender(from);
     }
@@ -199,11 +217,16 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     emit Transfer(from, to, tokenId);
   }
 
-  function safeTransferFrom(address from, address to, uint256 tokenId) public {
+  function safeTransferFrom(address from, address to, uint256 tokenId) public isNotPaused {
     safeTransferFrom(from, to, tokenId, "");
   }
 
-  function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data) public {
+  function safeTransferFrom(
+    address from,
+    address to,
+    uint256 tokenId,
+    bytes memory data
+  ) public isNotPaused {
     transferFrom(from, to, tokenId);
     checkOnERC721Received(msg.sender, from, to, tokenId, data);
   }
@@ -322,6 +345,11 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
 
   modifier onlyOwner() {
     if (msg.sender != _contractOwner) revert NotContractOwner();
+    _;
+  }
+
+  modifier isNotPaused() {
+    if (_paused) revert ContractIsPaused();
     _;
   }
 }

@@ -56,4 +56,9 @@ interface Errors {
    * @param tokenId Identifier of the token.
    */
   error TokenNotForSale(uint256 tokenId);
+
+  /**
+   * @dev Indicates that the contract is paused.
+   */
+  error ContractIsPaused();
 }
