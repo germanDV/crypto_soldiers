@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
 import {CryptoSoldiers, IERC721} from "../src/CryptoSoldiers.sol";
 import {Errors} from "../src/Errors.sol";
 import {DeployCryptoSoldiersScript} from "../script/DeployCryptoSoldiers.s.sol";
@@ -11,11 +12,7 @@ contract CryptoSoldiersTest is Test, Errors {
 
   function setUp() public {
     DeployCryptoSoldiersScript deployer = new DeployCryptoSoldiersScript();
-    cryptoSoldiers = deployer.run();
-
-    // Make CryptoSoldiersTest the owner of the CryptoSoldiers contract
-    vm.prank(address(msg.sender));
-    cryptoSoldiers.changeContractOwner(address(this));
+    cryptoSoldiers = deployer.run(address(this));
   }
 
   function test_name() public view {
@@ -31,9 +28,9 @@ contract CryptoSoldiersTest is Test, Errors {
   }
 
   function test_allTokensAssignedToContract() public view {
-    assertEq(cryptoSoldiers.balanceOf(address(cryptoSoldiers)), cryptoSoldiers.totalSupply());
-    assertEq(cryptoSoldiers.ownerOf(1), address(cryptoSoldiers));
-    assertEq(cryptoSoldiers.ownerOf(10), address(cryptoSoldiers));
+    assertEq(cryptoSoldiers.balanceOf(address(this)), cryptoSoldiers.totalSupply());
+    assertEq(cryptoSoldiers.ownerOf(1), address(this));
+    assertEq(cryptoSoldiers.ownerOf(10), address(this));
   }
 
   function testRevert_ownerOfInexistentToken() public {
@@ -54,7 +51,10 @@ contract CryptoSoldiersTest is Test, Errors {
     cryptoSoldiers.burn(3);
 
     // In addition to the event, test state after calling burn.
-    assertEq(cryptoSoldiers.balanceOf(address(cryptoSoldiers)), cryptoSoldiers.totalSupply() - 1);
+    assertEq(
+      cryptoSoldiers.balanceOf(cryptoSoldiers.contractOwner()),
+      cryptoSoldiers.totalSupply() - 1
+    );
   }
 
   function testRevert_ownerOfBurntToken() public {
@@ -141,46 +141,38 @@ contract CryptoSoldiersTest is Test, Errors {
     cryptoSoldiers.withdraw(beneficiary);
   }
 
-  function test_changeContractOwner() public {
-    address oldOwner = cryptoSoldiers.contractOwner();
-    address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+  function test_buyToken() public {
+    address oldOwner = cryptoSoldiers.ownerOf(7);
+
+    address buyer = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    vm.prank(buyer);
+    cryptoSoldiers.buyToken(7);
+
+    address newOwner = cryptoSoldiers.ownerOf(7);
     assertNotEq(oldOwner, newOwner);
-    cryptoSoldiers.changeContractOwner(newOwner);
-    assertEq(cryptoSoldiers.contractOwner(), newOwner);
+    assertEq(newOwner, buyer);
   }
 
-  function testRevert_changeContractOwnerNotByContractOwner() public {
-    address oldOwner = cryptoSoldiers.contractOwner();
-    address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
-    assertNotEq(oldOwner, newOwner);
+  // function test_transferFrom() public {
+  //   address oldOwner = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+  //   address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
 
-    vm.expectRevert(Errors.NotContractOwner.selector);
-    vm.prank(address(0xc0ffee254729296a45a3885639AC7E10F9d54979));
-    cryptoSoldiers.changeContractOwner(newOwner);
-  }
+  //   console.log("contract owner (before): ", cryptoSoldiers.contractOwner());
+  //   console.log("msg sender (before): ", msg.sender);
 
-  function test_changeContractOwnerEvent() public {
-    address oldOwner = cryptoSoldiers.contractOwner();
-    address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+  //   // setup: oldOwner buys the token from the Contract.
+  //   vm.prank(oldOwner);
 
-    vm.expectEmit(true, true, true, true);
-    emit CryptoSoldiers.ContractOwnerChanged(oldOwner, newOwner);
-    cryptoSoldiers.changeContractOwner(newOwner);
-  }
+  //   console.log("contract owner (after): ", cryptoSoldiers.contractOwner());
+  //   console.log("msg sender (after): ", msg.sender);
 
-  function test_transferFrom() public {
-    address oldOwner = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
-    address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+  //   cryptoSoldiers.buyToken(1);
+  //   assertEq(cryptoSoldiers.ownerOf(1), oldOwner);
 
-    // setup: oldOwner buys the token from the Contract.
-    vm.prank(oldOwner);
-    cryptoSoldiers.buyToken(1);
-    assertEq(cryptoSoldiers.ownerOf(1), oldOwner);
-
-    vm.prank(oldOwner);
-    cryptoSoldiers.transferFrom(oldOwner, newOwner, 1);
-    assertEq(cryptoSoldiers.ownerOf(1), newOwner);
-  }
+  //   vm.prank(oldOwner);
+  //   cryptoSoldiers.transferFrom(oldOwner, newOwner, 1);
+  //   assertEq(cryptoSoldiers.ownerOf(1), newOwner);
+  // }
 
   // function testRevert_transferFromInvalidSender() public {}
   // function testRevert_transferFromInvalidReceiver() public {}

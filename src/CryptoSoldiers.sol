@@ -71,7 +71,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
   string private _symbol;
   uint16 private _totalSupply;
 
-  event ContractOwnerChanged(address oldOwner, address newOwner);
+  event TokenPurchased(address buyer, uint256 tokenId);
 
   mapping(uint256 tokenId => address owner) private _owners;
   mapping(address owner => uint256 balance) private _balances;
@@ -79,11 +79,11 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
   mapping(address owner => mapping(address operator => bool hasPermission))
     private _operatorApprovals;
 
-  constructor(string memory name_, string memory symbol_, uint16 totalSupply_) {
+  constructor(address owner_, string memory name_, string memory symbol_, uint16 totalSupply_) {
     _baseURI = "https://api.cryptosoldiers.com/nft/";
     _name = name_;
     _symbol = symbol_;
-    _contractOwner = msg.sender;
+    _contractOwner = owner_;
     _totalSupply = totalSupply_;
     _mint(totalSupply_);
   }
@@ -96,10 +96,10 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return owner;
   }
 
-  function _requireNotOwned(uint256 tokenId) internal view {
+  function _requireForSale(uint256 tokenId) internal view {
     address owner = _owners[tokenId];
-    if (owner != address(0)) {
-      revert AlreadyOwnedToken(tokenId);
+    if (owner != _contractOwner) {
+      revert TokenNotForSale(tokenId);
     }
   }
 
@@ -134,28 +134,17 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
     return _contractOwner;
   }
 
-  function changeContractOwner(address newOwner) public onlyOwner {
-    address oldOwner = _contractOwner;
-    if (newOwner == address(0)) {
-      revert InvalidOwner(address(0));
-    }
-    _contractOwner = newOwner;
-    emit ContractOwnerChanged(oldOwner, newOwner);
-  }
-
   function buyToken(uint256 tokenId) public payable {
-    // _requireNotOwned(tokenId); // FIXME: this doesn't work because it is already owned by the contract
-    // TODO: check that token is for sale (owned by contract address)
+    _requireForSale(tokenId);
     // TODO: check if msg.value >= price. I could use Chainlink to get a ETH/USD exchange rate (https://docs.chain.link)
 
-    address from = address(this);
     address to = msg.sender;
-
-    _balances[from] -= 1;
+    _balances[_contractOwner] -= 1;
     _balances[to] += 1;
     _owners[tokenId] = to;
 
-    // TODO: emit event about the purchase
+    emit TokenPurchased(to, tokenId);
+
     // TODO: return excess payment if any
   }
 
@@ -296,8 +285,8 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
 
   function _mint(uint16 quantity) internal {
     for (uint16 i = 0; i < quantity; i++) {
-      _owners[i + 1] = address(this);
-      _balances[address(this)] += 1;
+      _owners[i + 1] = _contractOwner;
+      _balances[_contractOwner] += 1;
     }
   }
 

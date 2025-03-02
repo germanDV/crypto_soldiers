@@ -50,4 +50,10 @@ interface Errors {
    * @param operator Address that may be allowed to operate on tokens without being their owner.
    */
   error InvalidOperator(address operator);
+
+  /**
+   * @dev Indicates that `tokenId` is not for sale.
+   * @param tokenId Identifier of the token.
+   */
+  error TokenNotForSale(uint256 tokenId);
 }
