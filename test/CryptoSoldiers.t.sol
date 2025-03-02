@@ -153,29 +153,48 @@ contract CryptoSoldiersTest is Test, Errors {
     assertEq(newOwner, buyer);
   }
 
-  // function test_transferFrom() public {
-  //   address oldOwner = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
-  //   address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+  function test_transferFrom() public {
+    address oldOwner = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    address newOwner = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
 
-  //   console.log("contract owner (before): ", cryptoSoldiers.contractOwner());
-  //   console.log("msg sender (before): ", msg.sender);
+    vm.prank(oldOwner);
+    cryptoSoldiers.buyToken(10);
+    assertEq(cryptoSoldiers.ownerOf(10), oldOwner);
 
-  //   // setup: oldOwner buys the token from the Contract.
-  //   vm.prank(oldOwner);
+    vm.prank(oldOwner);
+    cryptoSoldiers.transferFrom(oldOwner, newOwner, 10);
+    assertEq(cryptoSoldiers.ownerOf(10), newOwner);
+  }
 
-  //   console.log("contract owner (after): ", cryptoSoldiers.contractOwner());
-  //   console.log("msg sender (after): ", msg.sender);
+  function testRevert_transferFromNotTokenOwner() public {
+    address from = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    address to = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+    vm.expectRevert(
+      abi.encodeWithSelector(Errors.IncorrectOwner.selector, from, 87, address(this))
+    );
+    vm.prank(from);
+    cryptoSoldiers.transferFrom(from, to, 87);
+  }
 
-  //   cryptoSoldiers.buyToken(1);
-  //   assertEq(cryptoSoldiers.ownerOf(1), oldOwner);
+  function testRevert_transferFromInvalidSender() public {
+    address from = address(0);
+    address to = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+    vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSender.selector, from));
+    cryptoSoldiers.transferFrom(from, to, 87);
+  }
 
-  //   vm.prank(oldOwner);
-  //   cryptoSoldiers.transferFrom(oldOwner, newOwner, 1);
-  //   assertEq(cryptoSoldiers.ownerOf(1), newOwner);
-  // }
+  function testRevert_transferFromInvalidReceiver() public {
+    address from = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+    address to = address(0);
+    vm.expectRevert(abi.encodeWithSelector(Errors.InvalidReceiver.selector, to));
+    cryptoSoldiers.transferFrom(from, to, 87);
+  }
 
-  // function testRevert_transferFromInvalidSender() public {}
-  // function testRevert_transferFromInvalidReceiver() public {}
-  // function testRevert_transferFromInexistentToken() public {}
-  // function testRevert_transferFromNotTokenOwner() public {}
+  function testRevert_transferFromInexistentToken() public {
+    address from = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    address to = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+    vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 878));
+    vm.prank(from);
+    cryptoSoldiers.transferFrom(from, to, 878);
+  }
 }

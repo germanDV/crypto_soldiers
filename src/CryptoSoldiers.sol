@@ -170,7 +170,7 @@ contract CryptoSoldiers is IERC165, IERC721, IERC721Metadata, Errors {
 
   function transferFrom(address from, address to, uint256 tokenId) public {
     if (from == address(0)) {
-      revert InvalidSender(to);
+      revert InvalidSender(from);
     }
 
     if (to == address(0)) {
