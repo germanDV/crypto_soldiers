@@ -7,11 +7,15 @@ import {CryptoSoldiers} from "../src/CryptoSoldiers.sol";
 contract DeployCryptoSoldiersScript is Script {
   uint16 private constant TOTAL_SUPPLY = 200;
   CryptoSoldiers cryptoSoldiers;
+  address private _owner;
 
-  // TODO: probably better to move `owner` to a state variable and assing it in the constructor.
-  function run(address owner) public returns (CryptoSoldiers) {
+  constructor(address owner_) {
+    _owner = owner_;
+  }
+
+  function run() public returns (CryptoSoldiers) {
     vm.startBroadcast();
-    cryptoSoldiers = new CryptoSoldiers(owner, "CryptoSoldiers", "CS", TOTAL_SUPPLY);
+    cryptoSoldiers = new CryptoSoldiers(_owner, "CryptoSoldiers", "CS", TOTAL_SUPPLY);
     vm.stopBroadcast();
     return cryptoSoldiers;
   }

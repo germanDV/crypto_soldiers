@@ -11,8 +11,8 @@ contract CryptoSoldiersTest is Test, Errors {
   CryptoSoldiers cryptoSoldiers;
 
   function setUp() public {
-    DeployCryptoSoldiersScript deployer = new DeployCryptoSoldiersScript();
-    cryptoSoldiers = deployer.run(address(this));
+    DeployCryptoSoldiersScript deployer = new DeployCryptoSoldiersScript(address(this));
+    cryptoSoldiers = deployer.run();
   }
 
   function test_name() public view {
@@ -252,5 +252,43 @@ contract CryptoSoldiersTest is Test, Errors {
     vm.expectRevert(abi.encodeWithSelector(Errors.NonexistentToken.selector, 878));
     vm.prank(from);
     cryptoSoldiers.transferFrom(from, to, 878);
+  }
+
+  function test_safeTransferFromWithoutData() public {
+    address from = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    address to = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+
+    vm.prank(from);
+    cryptoSoldiers.buyToken(9);
+    assertEq(cryptoSoldiers.ownerOf(9), from);
+    assertEq(cryptoSoldiers.balanceOf(from), 1);
+    assertEq(cryptoSoldiers.balanceOf(to), 0);
+    assertEq(cryptoSoldiers.ownerOf(9), from);
+
+    vm.prank(from);
+    cryptoSoldiers.safeTransferFrom(from, to, 9);
+    assertEq(cryptoSoldiers.ownerOf(9), to);
+    assertEq(cryptoSoldiers.balanceOf(from), 0);
+    assertEq(cryptoSoldiers.balanceOf(to), 1);
+    assertEq(cryptoSoldiers.ownerOf(9), to);
+  }
+
+  function test_safeTransferFromWithData() public {
+    address from = address(0xacc4166dAaB7eEA6690498D5A981307d31072ADA);
+    address to = address(0xc0ffee254729296a45a3885639AC7E10F9d54979);
+
+    vm.prank(from);
+    cryptoSoldiers.buyToken(9);
+    assertEq(cryptoSoldiers.ownerOf(9), from);
+    assertEq(cryptoSoldiers.balanceOf(from), 1);
+    assertEq(cryptoSoldiers.balanceOf(to), 0);
+    assertEq(cryptoSoldiers.ownerOf(9), from);
+
+    vm.prank(from);
+    cryptoSoldiers.safeTransferFrom(from, to, 9, "foo");
+    assertEq(cryptoSoldiers.ownerOf(9), to);
+    assertEq(cryptoSoldiers.balanceOf(from), 0);
+    assertEq(cryptoSoldiers.balanceOf(to), 1);
+    assertEq(cryptoSoldiers.ownerOf(9), to);
   }
 }
